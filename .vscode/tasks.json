@@ -1,0 +1,22 @@
+{
+    "tasks": [
+        {
+            "label": "Build OpenGL program",
+            "type": "shell",
+            "command": "cmake --build \"${workspaceFolder}/build\" --target program",
+            "args": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Builds the CMake program target."
+        }
+    ],
+    "version": "2.0.0"
+}

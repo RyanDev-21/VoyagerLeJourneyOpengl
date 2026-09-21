@@ -1,1 +1,16 @@
-build/
+# clangd LSP cache
+.clangd/
+.cache/
+# Build artifacts and binaries
+program
+*.o
+*.out
+*.dSYM/
+*.gch
+build
+# Editor swap files
+*.swp
+*.swo
+*~
+
+container.jpg
