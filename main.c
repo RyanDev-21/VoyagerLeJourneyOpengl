@@ -1,7 +1,10 @@
 #define UTIL_IMPLEMENTATION
+#include "cglm/mat4.h"
+#include "cglm/types.h"
 #include "include/utils.h"
 #include <GLFW/glfw3.h>
-#include <math.h>
+#include <assert.h>
+#include <cglm/cglm.h>
 #include <stdbool.h>
 #include <stdio.h>
 #define STB_IMAGE_IMPLEMENTATION
@@ -26,8 +29,9 @@ const char *vertex_shader_source = "#version 330 core\n"
                                    "layout (location=2) in vec2 aCoord;\n"
                                    "out vec3 aColor;\n"
                                    "out vec2 textCoord;\n"
+                                   "uniform mat4 trans;\n"
                                    "void main(){\n"
-                                   "gl_Position=vec4(aPos,1.0f);\n"
+                                   "gl_Position=trans*vec4(aPos,1.0f);\n"
                                    "aColor=inColor;\n"
                                    "textCoord=aCoord;\n"
                                    "}\0";
@@ -37,9 +41,10 @@ const char *frag_shader_source =
     "out vec4 color;\n"
     "in vec3 aColor;\n"
     "in vec2 textCoord;\n"
-    "uniform sampler2D text;\n"
+    "uniform sampler2D texture1;\n"
+    "uniform sampler2D texture2;\n"
     "void main(){\n"
-    "color=texture(text,textCoord)*vec4(aColor,1.0f);\n"
+    "color=mix(texture(texture1,textCoord),texture(texture2,textCoord),0.2f);\n"
     "}\0";
 
 static void error_callback(int error, const char *description) {
@@ -48,7 +53,6 @@ static void error_callback(int error, const char *description) {
 
 static void framebuffer_size_callback(GLFWwindow *window, int width,
                                       int height) {
-
   (void)window; // for the sake of warning
   glViewport(0, 0, width, height);
 }
@@ -62,9 +66,12 @@ static void key_callback(GLFWwindow *window, int key, int scanCode, int action,
   }
 }
 
-static GLuint read_and_bind_texture(const char *path) {
+static GLuint read_and_bind_texture(const char *path, GLuint program,
+                                    const char *uniform_label, GLenum format,
+                                    GLenum target) {
   GLuint texture_buff;
   glGenTextures(1, &texture_buff);
+  glActiveTexture(target);
   glBindTexture(GL_TEXTURE_2D, texture_buff);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -72,11 +79,12 @@ static GLuint read_and_bind_texture(const char *path) {
                   GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+  stbi_set_flip_vertically_on_load(true);
   int img_width, img_height, nrrChannels;
   unsigned char *data_image =
       stbi_load(path, &img_width, &img_height, &nrrChannels, 0);
   if (data_image) {
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB,
+    glTexImage2D(GL_TEXTURE_2D, 0, format, img_width, img_height, 0, format,
                  GL_UNSIGNED_BYTE, data_image);
     glGenerateMipmap(GL_TEXTURE_2D);
   } else {
@@ -85,6 +93,8 @@ static GLuint read_and_bind_texture(const char *path) {
     glDeleteTextures(1, &texture_buff);
     return 0;
   }
+  glUseProgram(program);
+  setInt(program, uniform_label, (int)target - GL_TEXTURE0);
   stbi_image_free(data_image);
   return texture_buff;
 }
@@ -118,11 +128,36 @@ static geometry *create_geometry(float vertices[], size_t size_vert,
   glEnableVertexAttribArray(2);
   return data;
 }
+
 static void destroy_geometry_data(geometry *data) {
   glDeleteBuffers(1, &data->vbo);
   glDeleteBuffers(1, &data->ebo);
   glDeleteVertexArrays(1, &data->vao);
   free(data);
+}
+
+static bool apply_trans_matrix(GLuint program, const char *uniform_label,
+                               vec3 translate_vec, vec3 rot_vec, float angle,
+                               vec3 scale_vec) {
+
+  GLint loc = glGetUniformLocation(program, uniform_label);
+  assert(loc != -1 && "Failed to find the uniform loc");
+  mat4 trans_mat = GLM_MAT4_IDENTITY_INIT;
+  if (translate_vec) {
+    glm_translate(trans_mat, translate_vec);
+  }
+  if (rot_vec) {
+    if (angle) {
+      glm_rotate(trans_mat, glm_rad(angle), rot_vec);
+    } else {
+      return false;
+    }
+  }
+  if (scale_vec) {
+    glm_scale(trans_mat, scale_vec);
+  }
+  glUniformMatrix4fv(loc, 1, GL_FALSE, (float *)trans_mat);
+  return true;
 }
 
 int main(void) {
@@ -163,9 +198,13 @@ int main(void) {
     return -1;
   }
 
-  GLuint texture = read_and_bind_texture("./container.jpg");
-  (void)texture;
+  GLuint texture = read_and_bind_texture("./container.jpg", program, "texture1",
+                                         GL_RGB, GL_TEXTURE0);
+  GLuint texture2 = read_and_bind_texture("./awesomeface.png", program,
+                                          "texture2", GL_RGBA, GL_TEXTURE1);
   geometry *data =
+      create_geometry(vertices, sizeof(vertices), indices, sizeof(indices));
+  geometry *data2 =
       create_geometry(vertices, sizeof(vertices), indices, sizeof(indices));
   while (!glfwWindowShouldClose(window)) {
     glfwGetFramebufferSize(window, &width, &height);
@@ -173,18 +212,26 @@ int main(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(program);
     glBindVertexArray(0);
-    float time_val = glfwGetTime();
-    float green_val = (sin(time_val) / 2.0f + 0.5f);
-    float red_val = cos(time_val);
-    int vertex_color_loc = glGetUniformLocation(program, "g_color");
-    glUniform4f(vertex_color_loc, red_val, green_val, 0.0f, 1.0f);
     glBindVertexArray(data->vao);
+    apply_trans_matrix(program, "trans", (vec3){0.5f, -0.5f, 0.5f},
+                       (vec3){0.0f, 0.0f, 0.1f}, 180.0f,
+                       (vec3){0.5f, 0.5f, 0.5f});
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+    glUseProgram(program);
+    glBindVertexArray(data2->vao);
+    apply_trans_matrix(program, "trans", (vec3){-0.5f, 0.5f, 0.5f},
+                       (vec3){0.0f, 0.0f, 0.1f}, 90.0f,
+                       (vec3){0.5f, 0.5f, 0.5f});
+
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
   glDeleteTextures(1, &texture);
+  glDeleteTextures(1, &texture2);
   destroy_geometry_data(data);
+  destroy_geometry_data(data2);
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
