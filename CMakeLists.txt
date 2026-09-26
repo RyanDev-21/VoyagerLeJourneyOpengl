@@ -13,17 +13,20 @@ add_library(glad STATIC
     include/glad/src/glad.c
 )
 
+
+
 # add_library(glm STATIC
 #     include/glm/glm.c
 # )
 target_include_directories(glad PUBLIC
     include/glad/include
 )
+
+
 target_link_libraries(glad PUBLIC
     ${CMAKE_DL_LIBS}
 )
 
-add_executable(program main.c)
 include(FetchContent)
 FetchContent_Declare(
     cglm
@@ -31,21 +34,27 @@ FetchContent_Declare(
     GIT_TAG        v0.9.4 # Or latest release tag
 )
 FetchContent_MakeAvailable(cglm)
+
+
+add_subdirectory(include/lib)
+add_executable(program main.c)
+
 target_include_directories(program PRIVATE
     include
 )
 
+target_link_options(program PRIVATE -fsanitize=address)
 target_compile_options(program PRIVATE
     -Wall
     -Wextra
     -Werror
     -pedantic
     -ggdb
+    -fsanitize=address
 )
 
 target_link_libraries(program PRIVATE
-    glad
-    cglm 
+    gl_util
     glfw
     OpenGL::GL
     m

@@ -1,40 +1,36 @@
-#define UTIL_IMPLEMENTATION
-#include "cglm/mat4.h"
-#include "cglm/types.h"
-#include "include/utils.h"
+#include "cglm/cam.h"
+#include "cglm/vec3.h"
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <assert.h>
-#include <cglm/cglm.h>
+#include <lib/lib.h>
 #include <stdbool.h>
 #include <stdio.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include "include/std_image.h"
-typedef enum {
-  VERTEX,
-  FRAG,
-} shader_type;
 
-float vertices[] = {
-    // positions          // colors           // texture coords
-    0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top right
-    0.5f,  -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom right
-    -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom left
-    -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f  // top left
-};
+/* float vertices[] = { */
+/*     // positions          // colors           // texture coords */
+/*     0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top right */
+/*     0.5f,  -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom right */
+/*     -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom left */
+/*     -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f  // top left */
+/* }; */
+/* int indices[] = {0, 1, 2, 3, 0, 2}; */
 
-int indices[] = {0, 1, 2, 3, 0, 2};
-const char *vertex_shader_source = "#version 330 core\n"
-                                   "layout (location=0) in vec3 aPos;\n"
-                                   "layout (location=1) in vec3 inColor;\n"
-                                   "layout (location=2) in vec2 aCoord;\n"
-                                   "out vec3 aColor;\n"
-                                   "out vec2 textCoord;\n"
-                                   "uniform mat4 trans;\n"
-                                   "void main(){\n"
-                                   "gl_Position=trans*vec4(aPos,1.0f);\n"
-                                   "aColor=inColor;\n"
-                                   "textCoord=aCoord;\n"
-                                   "}\0";
+const char *vertex_shader_source =
+    "#version 330 core\n"
+    "layout (location=0) in vec3 aPos;\n"
+    "layout (location=1) in vec2 aCoord;\n"
+    "layout (location=2) in vec3 inColor;\n"
+    "out vec3 aColor;\n"
+    "out vec2 textCoord;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
+    "void main(){\n"
+    "gl_Position=projection*view*model*vec4(aPos,1.0f);\n"
+    "aColor=inColor;\n"
+    "textCoord=aCoord;\n"
+    "}\0";
 
 const char *frag_shader_source =
     "#version 330 core\n"
@@ -59,6 +55,7 @@ static void framebuffer_size_callback(GLFWwindow *window, int width,
 
 static void key_callback(GLFWwindow *window, int key, int scanCode, int action,
                          int mods) {
+  /* float cam_speed = 0.5f; */
   (void)mods; // for the sake of compiler wwarnings
   (void)scanCode;
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
@@ -66,98 +63,29 @@ static void key_callback(GLFWwindow *window, int key, int scanCode, int action,
   }
 }
 
-static GLuint read_and_bind_texture(const char *path, GLuint program,
-                                    const char *uniform_label, GLenum format,
-                                    GLenum target) {
-  GLuint texture_buff;
-  glGenTextures(1, &texture_buff);
-  glActiveTexture(target);
-  glBindTexture(GL_TEXTURE_2D, texture_buff);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                  GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-  stbi_set_flip_vertically_on_load(true);
-  int img_width, img_height, nrrChannels;
-  unsigned char *data_image =
-      stbi_load(path, &img_width, &img_height, &nrrChannels, 0);
-  if (data_image) {
-    glTexImage2D(GL_TEXTURE_2D, 0, format, img_width, img_height, 0, format,
-                 GL_UNSIGNED_BYTE, data_image);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    printf("[ERROR]failed to create a image data\n");
-    stbi_image_free(data_image);
-    glDeleteTextures(1, &texture_buff);
-    return 0;
-  }
-  glUseProgram(program);
-  setInt(program, uniform_label, (int)target - GL_TEXTURE0);
-  stbi_image_free(data_image);
-  return texture_buff;
+void cam_vec3_move(vec3 points, vec3 *pos, float speed) {
+  vec3 move;
+  glm_vec3_scale(points, speed, move);
+  glm_vec3_add(move, *pos, (float *)pos);
 }
 
-typedef struct {
-  GLuint vao;
-  GLuint vbo;
-  GLuint ebo;
-} geometry;
-
-static geometry *create_geometry(float vertices[], size_t size_vert,
-                                 int indices[], size_t size_idx) {
-  geometry *data = malloc(sizeof(geometry));
-  glGenVertexArrays(1, &data->vao);
-  glBindVertexArray(data->vao);
-  glGenBuffers(1, &data->vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, data->vbo);
-  glBufferData(GL_ARRAY_BUFFER, size_vert, vertices, GL_STATIC_DRAW);
-
-  glGenBuffers(1, &data->ebo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data->ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_idx, indices, GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(0);
-
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
-                        (void *)(3 * sizeof(float)));
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
-                        (void *)(6 * sizeof(float)));
-  glEnableVertexAttribArray(2);
-  return data;
-}
-
-static void destroy_geometry_data(geometry *data) {
-  glDeleteBuffers(1, &data->vbo);
-  glDeleteBuffers(1, &data->ebo);
-  glDeleteVertexArrays(1, &data->vao);
-  free(data);
-}
-
-static bool apply_trans_matrix(GLuint program, const char *uniform_label,
-                               vec3 translate_vec, vec3 rot_vec, float angle,
-                               vec3 scale_vec) {
-
-  GLint loc = glGetUniformLocation(program, uniform_label);
-  assert(loc != -1 && "Failed to find the uniform loc");
-  mat4 trans_mat = GLM_MAT4_IDENTITY_INIT;
-  if (translate_vec) {
-    glm_translate(trans_mat, translate_vec);
+void process_input(GLFWwindow *window, perspective *cam, float delta_time) {
+  float camera_speed = 10.0f * delta_time;
+  vec3 up = {0.0f, 1.0f, 0.0f};
+  vec3 right;
+  glm_vec3_cross(cam->points, up, right);
+  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+    cam_vec3_move(cam->points, &cam->position, camera_speed);
   }
-  if (rot_vec) {
-    if (angle) {
-      glm_rotate(trans_mat, glm_rad(angle), rot_vec);
-    } else {
-      return false;
-    }
+  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+    cam_vec3_move(cam->points, &cam->position, -camera_speed);
   }
-  if (scale_vec) {
-    glm_scale(trans_mat, scale_vec);
+  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+    cam_vec3_move(right, &cam->position, camera_speed);
   }
-  glUniformMatrix4fv(loc, 1, GL_FALSE, (float *)trans_mat);
-  return true;
+  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+    cam_vec3_move(right, &cam->position, -camera_speed);
+  }
 }
 
 int main(void) {
@@ -202,36 +130,49 @@ int main(void) {
                                          GL_RGB, GL_TEXTURE0);
   GLuint texture2 = read_and_bind_texture("./awesomeface.png", program,
                                           "texture2", GL_RGBA, GL_TEXTURE1);
-  geometry *data =
-      create_geometry(vertices, sizeof(vertices), indices, sizeof(indices));
-  geometry *data2 =
-      create_geometry(vertices, sizeof(vertices), indices, sizeof(indices));
+  geometry *data = create_cube_geometry();
+
+  vec3 cubePositions[] = {
+      {0.0f, 0.0f, 0.0f},     {2.0f, 0.0f, -15.0f}, {-1.5f, -2.2f, -2.5f},
+      {-3.8f, -2.0f, -12.3f}, {2.4f, -0.4f, -3.5f}, {-1.7f, 3.0f, -7.5f},
+      {1.3f, -2.0f, -2.5f},   {1.5f, 2.0f, -2.5f},  {1.5f, 0.2f, -1.5f},
+      {-1.3f, 1.0f, -1.5f},
+  };
+  perspective data_cam = {
+      .points = {0.0f, 0.0f, -1.0f},
+      .position = {0.0f, 0.0f, 3.0f},
+      .ratio = (float)width / (float)height,
+      .near = 0.1f,
+      .far = 1000.0f,
+  };
   while (!glfwWindowShouldClose(window)) {
     glfwGetFramebufferSize(window, &width, &height);
+    float delta_time = 1.0f / 60.0f;
+    process_input(window, &data_cam, delta_time);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
     glUseProgram(program);
     glBindVertexArray(0);
     glBindVertexArray(data->vao);
-    apply_trans_matrix(program, "trans", (vec3){0.5f, -0.5f, 0.5f},
-                       (vec3){0.0f, 0.0f, 0.1f}, 180.0f,
-                       (vec3){0.5f, 0.5f, 0.5f});
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
-    glUseProgram(program);
-    glBindVertexArray(data2->vao);
-    apply_trans_matrix(program, "trans", (vec3){-0.5f, 0.5f, 0.5f},
-                       (vec3){0.0f, 0.0f, 0.1f}, 90.0f,
-                       (vec3){0.5f, 0.5f, 0.5f});
-
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    vec3 center;
+    glm_vec3_add(data_cam.position, data_cam.points, center);
+    mat4 view = GLM_MAT4_IDENTITY_INIT;
+    for (int i = 0; i < 10; i++) {
+      glm_lookat(data_cam.position, center, (vec3){0.0f, 1.0f, 0.0f}, view);
+      setMatrix4v(program, "view", view);
+      apply_trans_matrix(program, "projection", NULL, NULL, 45.0f, &data_cam,
+                         NULL);
+      apply_trans_matrix(program, "model", cubePositions[i],
+                         (vec3){1.0f, 0.3f, 0.5f}, glm_rad(50.0f), NULL, NULL);
+      glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    }
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
   glDeleteTextures(1, &texture);
   glDeleteTextures(1, &texture2);
   destroy_geometry_data(data);
-  destroy_geometry_data(data2);
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
