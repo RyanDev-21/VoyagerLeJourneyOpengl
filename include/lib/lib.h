@@ -25,8 +25,9 @@ typedef struct {
   GLuint vao;
   GLuint vbo;
   GLuint ebo;
+  size_t vertex_count;
+  size_t indices_count;
 } geometry;
-//
 typedef enum {
   NORMAL_MAP,
   BUMP_MAP,
@@ -41,51 +42,42 @@ typedef struct {
   GLuint textureID;
   GLuint shaderID;
 } material;
-//
-// typedef struct {
-//   geometry *geo;
-//   material *mat;
-// } object;
-//
-// typedef struct {
-//   object objs[];
-//
-// } scene;
 
 typedef struct {
-  vec3 points;
   vec3 position;
-  float ratio;
-  float near;
-  float far;
-} perspective;
-
+  vec3 scale_vec;
+  vec3 rot_vec;
+  float angle;
+} objAttrib;
 typedef struct {
   geometry *geo;
   material *mat;
-  vec3 position;
+  objAttrib attrib;
 } object;
 
-GLuint compile_into_program(const char *vertex_shader_source,
-                            const char *frag_shader_source);
+typedef enum {
+  VERTEX,
+  FRAG,
+} shaderType;
+
 void setBool(GLuint program, const char *name, bool value);
 void setInt(GLuint program, const char *name, int value);
 void setFloat(GLuint program, const char *name, float value);
-GLuint read_and_bind_texture(const char *path, GLuint program,
-                             const char *uniform_label, GLenum format,
-                             GLenum target);
 void setMatrix4v(GLuint program, const char *name, mat4 matrix);
-geometry *create_geometry(float vertices[], size_t size_vert, size_t stride,
+geometry *create_geometry(float vertices[], size_t size_vert,
                           unsigned int indices[], size_t size_idx);
-// have to refactor this to just take enum and apply it based on that
-void apply_trans_matrix(GLuint program, const char *uniform_label,
-                        vec3 translate_vec, vec3 rot_vec, float angle,
-                        perspective *proj, vec3 scale_vec);
+void apply_trans_matrix(vec3 translate_vec, vec3 rot_vec, float angle,
+                        vec3 scale_vec, mat4 *dest);
 void destroy_geometry_data(geometry *data);
+material *create_standard_material(const char *tex_source, text_map type,
+                                   shader *shader);
+void destroy_material_data(material *mat);
 void render_recursive_carpet(GLuint program, float cx, float cy, float size,
                              int depth, float time_val, size_t *triangle_count);
-geometry *create_cube_geometry();
-void render(object *obj);
+geometry *create_cube_geometry(void);
+void render(object *obj, bool wireframe);
+object *create_mesh(geometry *geo, material *mat, objAttrib *attr);
+void destroy_obj(object *obj);
 #ifdef __cplusplus
 }
 #endif

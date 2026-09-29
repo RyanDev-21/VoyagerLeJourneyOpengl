@@ -1,5 +1,5 @@
-add_library(gl_util STATIC lib.c )
-
+add_library(gl_util STATIC lib.c camera.c renderer.c)
+ 
 target_include_directories(gl_util PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

@@ -1,47 +1,25 @@
-#include "cglm/cam.h"
 #include "cglm/vec3.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <assert.h>
-#include <lib/lib.h>
+#include <camera.h>
+#include <lib.h>
+#include <renderer.h>
 #include <stdbool.h>
 #include <stdio.h>
 
-/* float vertices[] = { */
-/*     // positions          // colors           // texture coords */
-/*     0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top right */
-/*     0.5f,  -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom right */
-/*     -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom left */
-/*     -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f  // top left */
-/* }; */
-/* int indices[] = {0, 1, 2, 3, 0, 2}; */
-
 const char *vertex_shader_source =
     "#version 330 core\n"
-    "layout (location=0) in vec3 aPos;\n"
-    "layout (location=1) in vec2 aCoord;\n"
-    "layout (location=2) in vec3 inColor;\n"
-    "out vec3 aColor;\n"
-    "out vec2 textCoord;\n"
-    "uniform mat4 model;\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 projection;\n"
     "void main(){\n"
-    "gl_Position=projection*view*model*vec4(aPos,1.0f);\n"
-    "aColor=inColor;\n"
-    "textCoord=aCoord;\n"
+    "gl_Position=_projection*_view*u_model*vec4(position,1.0f);\n"
+    "a_color=color;\n"
+    "a_textCoord=textureCoord;\n"
     "}\0";
 
-const char *frag_shader_source =
-    "#version 330 core\n"
-    "out vec4 color;\n"
-    "in vec3 aColor;\n"
-    "in vec2 textCoord;\n"
-    "uniform sampler2D texture1;\n"
-    "uniform sampler2D texture2;\n"
-    "void main(){\n"
-    "color=mix(texture(texture1,textCoord),texture(texture2,textCoord),0.2f);\n"
-    "}\0";
+const char *frag_shader_source = "#version 330 core\n"
+                                 "void main(){\n"
+                                 "FragColor=texture(texture1,a_textCoord);\n"
+                                 "}\0";
 
 static void error_callback(int error, const char *description) {
   fprintf(stderr, "Error:%d , Description:%s\n", error, description);
@@ -50,6 +28,7 @@ static void error_callback(int error, const char *description) {
 static void framebuffer_size_callback(GLFWwindow *window, int width,
                                       int height) {
   (void)window; // for the sake of warning
+
   glViewport(0, 0, width, height);
 }
 
@@ -69,16 +48,18 @@ void cam_vec3_move(vec3 points, vec3 *pos, float speed) {
   glm_vec3_add(move, *pos, (float *)pos);
 }
 
-void process_input(GLFWwindow *window, perspective *cam, float delta_time) {
-  float camera_speed = 10.0f * delta_time;
+void cam_callback(camera *cam, float dt, void *user_data) {
+  GLFWwindow *window = (GLFWwindow *)user_data;
+  float camera_speed = 10.0f * dt;
   vec3 up = {0.0f, 1.0f, 0.0f};
   vec3 right;
-  glm_vec3_cross(cam->points, up, right);
+  glm_vec3_cross(cam->point_dir, up, right);
+  glm_vec3_normalize(right);
   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-    cam_vec3_move(cam->points, &cam->position, camera_speed);
+    cam_vec3_move(cam->point_dir, &cam->position, camera_speed);
   }
   if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-    cam_vec3_move(cam->points, &cam->position, -camera_speed);
+    cam_vec3_move(cam->point_dir, &cam->position, -camera_speed);
   }
   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
     cam_vec3_move(right, &cam->position, camera_speed);
@@ -88,6 +69,26 @@ void process_input(GLFWwindow *window, perspective *cam, float delta_time) {
   }
 }
 
+/* void process_input(GLFWwindow *window, perspective *cam, float delta_time) {
+ */
+/*   float camera_speed = 10.0f * delta_time; */
+/*   vec3 up = {0.0f, 1.0f, 0.0f}; */
+/*   vec3 right; */
+/*   glm_vec3_cross(cam->points, up, right); */
+/*   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { */
+/*     cam_vec3_move(cam->points, &cam->position, camera_speed); */
+/*   } */
+/*   if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { */
+/*     cam_vec3_move(cam->points, &cam->position, -camera_speed); */
+/*   } */
+/*   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { */
+/*     cam_vec3_move(right, &cam->position, camera_speed); */
+/*   } */
+/*   if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { */
+/*     cam_vec3_move(right, &cam->position, -camera_speed); */
+/*   } */
+/* } */
+/**/
 int main(void) {
   int width = 640;
   int height = 640;
@@ -118,61 +119,51 @@ int main(void) {
     printf("Failed to init the openGL context\n");
     return -1;
   }
-
-  GLuint program =
-      compile_into_program(vertex_shader_source, frag_shader_source);
-
-  if (program == 0) {
-    return -1;
-  }
-
-  GLuint texture = read_and_bind_texture("./container.jpg", program, "texture1",
-                                         GL_RGB, GL_TEXTURE0);
-  GLuint texture2 = read_and_bind_texture("./awesomeface.png", program,
-                                          "texture2", GL_RGBA, GL_TEXTURE1);
-  geometry *data = create_cube_geometry();
-
+  geometry *geo = create_cube_geometry();
+  shader shader = {
+      .vertex = vertex_shader_source,
+      .frag = frag_shader_source,
+  };
+  material *mat =
+      create_standard_material("./container.jpg", NORMAL_MAP, &shader);
   vec3 cubePositions[] = {
       {0.0f, 0.0f, 0.0f},     {2.0f, 0.0f, -15.0f}, {-1.5f, -2.2f, -2.5f},
       {-3.8f, -2.0f, -12.3f}, {2.4f, -0.4f, -3.5f}, {-1.7f, 3.0f, -7.5f},
       {1.3f, -2.0f, -2.5f},   {1.5f, 2.0f, -2.5f},  {1.5f, 0.2f, -1.5f},
       {-1.3f, 1.0f, -1.5f},
   };
-  perspective data_cam = {
-      .points = {0.0f, 0.0f, -1.0f},
-      .position = {0.0f, 0.0f, 3.0f},
-      .ratio = (float)width / (float)height,
-      .near = 0.1f,
-      .far = 1000.0f,
-  };
+  object *obj_list[10];
+  float time_val = glfwGetTime();
+  for (int i = 0; i < 10; i++) {
+    objAttrib attr = {.angle = glm_rad(cos(time_val) * 90.0f),
+                      .rot_vec = {1.0f, 0.0f, 0.0f},
+                      .scale_vec = {1.0f, 1.0f, 1.0f}};
+    glm_vec3_copy(cubePositions[i], attr.position);
+    obj_list[i] = create_mesh(geo, mat, &attr);
+  }
+
+  camera *cam = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f},
+                           45.0f, 0.1f, 100.0f, (float)width / (float)height);
+  cam_set_update_callback(cam, cam_callback, window);
+  renderer_init(window);
+  renderer_set_active_cam(cam);
   while (!glfwWindowShouldClose(window)) {
     glfwGetFramebufferSize(window, &width, &height);
-    float delta_time = 1.0f / 60.0f;
-    process_input(window, &data_cam, delta_time);
-    glViewport(0, 0, width, height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
-    glUseProgram(program);
-    glBindVertexArray(0);
-    glBindVertexArray(data->vao);
-    vec3 center;
-    glm_vec3_add(data_cam.position, data_cam.points, center);
-    mat4 view = GLM_MAT4_IDENTITY_INIT;
+    cam_update_ratio(cam, (float)width / (float)height);
+    float dt = 1.0f / 60.0f;
+    renderer_begin_frame(dt);
     for (int i = 0; i < 10; i++) {
-      glm_lookat(data_cam.position, center, (vec3){0.0f, 1.0f, 0.0f}, view);
-      setMatrix4v(program, "view", view);
-      apply_trans_matrix(program, "projection", NULL, NULL, 45.0f, &data_cam,
-                         NULL);
-      apply_trans_matrix(program, "model", cubePositions[i],
-                         (vec3){1.0f, 0.3f, 0.5f}, glm_rad(50.0f), NULL, NULL);
-      glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+      render(obj_list[i], i % 2 == 0 ? true : false);
     }
-    glfwSwapBuffers(window);
+    renderer_end_frame();
     glfwPollEvents();
   }
-  glDeleteTextures(1, &texture);
-  glDeleteTextures(1, &texture2);
-  destroy_geometry_data(data);
+  destroy_geometry_data(geo);
+  destroy_material_data(mat);
+  // right now i am just doing to work it out
+  for (int i = 0; i < 10; i++) {
+    destroy_obj(obj_list[i]);
+  }
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
