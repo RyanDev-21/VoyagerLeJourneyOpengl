@@ -25,31 +25,20 @@ camera *create_cam(vec3 position, vec3 point_dir, float view_angle, float near,
 void cam_system_shutdown(void) { glDeleteBuffers(1, &cam_ubo); }
 void cam_destroy(camera *cam) { free(cam); }
 
-void cam_set_update_callback(camera *cam, update_callback update_func,
-                             void *data) {
-  cam->update_func = update_func;
-  cam->update_data = data;
+void cam_set_update_key_callback(camera *cam, update_callback update_func,
+                                 void *data) {
+  cam->update_key_func = update_func;
+  cam->update_key_data = data;
+}
+
+void cam_set_update_mouse_callback(camera *cam,
+                                   update_mouse_callback update_func,
+                                   void *data) {
+  cam->update_mouse_func = update_func;
+  cam->update_mouse_data = data;
 }
 
 void cam_update_ratio(camera *cam, float ratio) { cam->ratio = ratio; }
-/* static mat4 *camera_recompute_view(const camera *cam) { */
-/*   vec3 center; */
-/*   mat4 *view = malloc(sizeof(mat4)); */
-/*   glm_mat4_identity(*view); */
-/*   assert(view && "Failed to allocate the space of view"); */
-/*   glm_vec3_add((float *)cam->position, (float *)cam->point_dir, center); */
-/*   glm_lookat((float *)cam->position, center, (vec3){0.0f, 1.0f, 0.0f},
- * *view); */
-/*   return view; */
-/* } */
-/* static mat4 *camera_recompute_projection(const camera *cam) { */
-/*   mat4 *proj = malloc(sizeof(mat4)); */
-/*   glm_mat4_identity(*proj); */
-/*   glm_perspective(glm_rad(cam->view_angle), cam->ratio, cam->near, cam->far,
- */
-/*                   *proj); */
-/*   return proj; */
-/* } */
 
 void cam_upload(const camera *cam) {
   mat4 projection, view;
@@ -63,7 +52,11 @@ void cam_upload(const camera *cam) {
 }
 
 void cam_update(camera *cam, float dt) {
-  if (cam->update_func) {
-    cam->update_func(cam, dt, cam->update_data);
+  if (cam->update_key_func) {
+    cam->update_key_func(cam, dt, cam->update_key_data);
+  }
+
+  if (cam->update_mouse_func) {
+    cam->update_mouse_func(cam, cam->update_mouse_data);
   }
 }

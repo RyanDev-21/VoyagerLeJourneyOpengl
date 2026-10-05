@@ -16,10 +16,17 @@ const char *vertex_shader_source =
     "a_textCoord=textureCoord;\n"
     "}\0";
 
-const char *frag_shader_source = "#version 330 core\n"
-                                 "void main(){\n"
-                                 "FragColor=texture(texture1,a_textCoord);\n"
-                                 "}\0";
+const char *frag_shader_source =
+    "#version 330 core\n"
+    "uniform vec3 objectColor;\n"
+    "uniform vec3 lightColor;\n"
+    "void main(){\n"
+    "FragColor=vec4(objectColor*lightColor,1.0f);\n"
+    "}\0";
+const char *frag_shader_source_2 = "#version 330 core\n"
+                                   "void main(){\n"
+                                   "FragColor=vec4(1.0f);\n"
+                                   "};\n";
 
 static void error_callback(int error, const char *description) {
   fprintf(stderr, "Error:%d , Description:%s\n", error, description);
@@ -48,18 +55,69 @@ void cam_vec3_move(vec3 points, vec3 *pos, float speed) {
   glm_vec3_add(move, *pos, (float *)pos);
 }
 
-void cam_callback(camera *cam, float dt, void *user_data) {
+float lastX = 0;
+float lastY = 0;
+float sensitivity = 0.01f;
+
+camera *cam2;
+void apply_direction_cam(camera *cam, float xoffset, float yoffset) {
+  cam->yaw += xoffset;
+  cam->pitch -= yoffset; // reverse this so that when going up will look up
+  if (cam->pitch > 89.0f) {
+    cam->pitch = 89.0f;
+  }
+  if (cam->pitch < -89.0f) {
+    cam->pitch = -89.0f;
+  }
+  vec3 direction;
+  direction[0] = cosf(glm_rad(cam->yaw)) * cosf(glm_rad(cam->pitch));
+  direction[1] = sinf(glm_rad(cam->pitch));
+  direction[2] = sinf(glm_rad(cam->yaw)) * cosf(glm_rad(cam->pitch));
+  glm_normalize(direction);
+  glm_vec3_copy(direction, cam->point_dir);
+}
+void cam_mouse_callback(GLFWwindow *window, double xpos, double ypos) {
+  (void)window;
+  float xoffset = xpos - lastX;
+  float yoffset = ypos - lastY;
+  lastX = xpos;
+  lastY = ypos;
+
+  xoffset *= sensitivity;
+  yoffset *= sensitivity;
+  apply_direction_cam(cam2, xoffset, yoffset);
+}
+
+void cam_scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
+  (void)window;
+  (void)xoffset;
+  cam2->view_angle -= (float)yoffset;
+  if (cam2->view_angle < 0.1f) {
+    cam2->view_angle = 0.1f;
+  }
+  if (cam2->view_angle > 45.0f) {
+    cam2->view_angle = 45.0f;
+  }
+}
+
+void cam_key_callback(camera *cam, float dt, void *user_data) {
   GLFWwindow *window = (GLFWwindow *)user_data;
   float camera_speed = 10.0f * dt;
   vec3 up = {0.0f, 1.0f, 0.0f};
+
   vec3 right;
-  glm_vec3_cross(cam->point_dir, up, right);
+  vec3 tmp;
+  glm_vec3_copy(cam->point_dir, tmp);
+  if (tmp[1] >= -1.0f && tmp[1] <= 1.0f) {
+    tmp[1] = 0.0f;
+  }
+  glm_vec3_cross(tmp, up, right);
   glm_vec3_normalize(right);
   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-    cam_vec3_move(cam->point_dir, &cam->position, camera_speed);
+    cam_vec3_move(tmp, &cam->position, camera_speed);
   }
   if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-    cam_vec3_move(cam->point_dir, &cam->position, -camera_speed);
+    cam_vec3_move(tmp, &cam->position, -camera_speed);
   }
   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
     cam_vec3_move(right, &cam->position, camera_speed);
@@ -69,26 +127,11 @@ void cam_callback(camera *cam, float dt, void *user_data) {
   }
 }
 
-/* void process_input(GLFWwindow *window, perspective *cam, float delta_time) {
- */
-/*   float camera_speed = 10.0f * delta_time; */
-/*   vec3 up = {0.0f, 1.0f, 0.0f}; */
-/*   vec3 right; */
-/*   glm_vec3_cross(cam->points, up, right); */
-/*   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { */
-/*     cam_vec3_move(cam->points, &cam->position, camera_speed); */
-/*   } */
-/*   if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { */
-/*     cam_vec3_move(cam->points, &cam->position, -camera_speed); */
-/*   } */
-/*   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { */
-/*     cam_vec3_move(right, &cam->position, camera_speed); */
-/*   } */
-/*   if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { */
-/*     cam_vec3_move(right, &cam->position, -camera_speed); */
-/*   } */
-/* } */
-/**/
+void update_rotation(object *obj, float dt, void *user_data) {
+  (void)user_data;
+  (void)dt;
+  obj->attrib.angle = sin(glfwGetTime()) * 90.0f;
+}
 int main(void) {
   int width = 640;
   int height = 640;
@@ -120,48 +163,72 @@ int main(void) {
     return -1;
   }
   geometry *geo = create_cube_geometry();
-  shader shader = {
+  shader shader_1 = {
       .vertex = vertex_shader_source,
       .frag = frag_shader_source,
   };
-  material *mat =
-      create_standard_material("./container.jpg", NORMAL_MAP, &shader);
-  vec3 cubePositions[] = {
-      {0.0f, 0.0f, 0.0f},     {2.0f, 0.0f, -15.0f}, {-1.5f, -2.2f, -2.5f},
-      {-3.8f, -2.0f, -12.3f}, {2.4f, -0.4f, -3.5f}, {-1.7f, 3.0f, -7.5f},
-      {1.3f, -2.0f, -2.5f},   {1.5f, 2.0f, -2.5f},  {1.5f, 0.2f, -1.5f},
-      {-1.3f, 1.0f, -1.5f},
+  shader shader_2 = {
+      .vertex = vertex_shader_source,
+      .frag = frag_shader_source_2,
   };
-  object *obj_list[10];
-  float time_val = glfwGetTime();
-  for (int i = 0; i < 10; i++) {
-    objAttrib attr = {.angle = glm_rad(cos(time_val) * 90.0f),
-                      .rot_vec = {1.0f, 0.0f, 0.0f},
-                      .scale_vec = {1.0f, 1.0f, 1.0f}};
-    glm_vec3_copy(cubePositions[i], attr.position);
-    obj_list[i] = create_mesh(geo, mat, &attr);
-  }
 
-  camera *cam = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f},
-                           45.0f, 0.1f, 100.0f, (float)width / (float)height);
-  cam_set_update_callback(cam, cam_callback, window);
+  material *mat = create_standard_material(NULL, NORMAL_MAP, &shader_1);
+  // making two different material  for only change in frag shader is worth it i
+  // guess
+  // need to change later
+  material *mat2 = create_standard_material(NULL, NORMAL_MAP, &shader_2);
+  object *obj;
+  object *obj2;
+  objAttrib attr = {.angle = glm_rad(40.0f),
+                    .rot_vec = {1.0f, 0.0f, 0.0f},
+                    .scale_vec = {1.0f, 1.0f, 1.0f}};
+  glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, attr.position);
+  obj = create_mesh(geo, mat, &attr);
+  set_obj_update_callback(obj, update_rotation, NULL);
+  glm_vec3_copy((vec3){1.0f, 1.2f, -2.0f}, attr.position);
+  obj2 = create_mesh(geo, mat2, &attr);
+  set_obj_update_callback(obj2, NULL, NULL);
+
+  // this one has to really shrink down
+  cam2 = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f}, 45.0f,
+                    0.1f, 100.0f, (float)width / (float)height);
+  cam2->yaw = -90.0f;
+  cam_set_update_key_callback(cam2, cam_key_callback, window);
   renderer_init(window);
-  renderer_set_active_cam(cam);
+  renderer_set_active_cam(cam2);
+  float current_time;
+  float last_time;
+  //
+  //
+  // this shouldn't be in this this should be abstracted
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetCursorPosCallback(window, cam_mouse_callback);
+  glfwSetScrollCallback(window, cam_scroll_callback);
+  //
+  //
+  // up to this
+  object *obj_list[2] = {obj, obj2};
   while (!glfwWindowShouldClose(window)) {
     glfwGetFramebufferSize(window, &width, &height);
-    cam_update_ratio(cam, (float)width / (float)height);
-    float dt = 1.0f / 60.0f;
+    cam_update_ratio(cam2, (float)width / (float)height);
+    current_time = glfwGetTime();
+    float dt = current_time - last_time;
+    last_time = current_time;
     renderer_begin_frame(dt);
-    for (int i = 0; i < 10; i++) {
-      render(obj_list[i], i % 2 == 0 ? true : false);
-    }
+    renderer_set_obj_list(obj_list, 2);
+    glUseProgram(mat->shaderID);
+    setVec3(mat->shaderID, "lightColor", 1.0f, 1.0f, 1.0f);
+    setVec3(mat->shaderID, "objectColor", 1.0f, 0.5f, 0.31f);
+    render(obj_list[0], false);
+    render(obj_list[1], false);
     renderer_end_frame();
     glfwPollEvents();
   }
   destroy_geometry_data(geo);
   destroy_material_data(mat);
-  // right now i am just doing to work it out
-  for (int i = 0; i < 10; i++) {
+  destroy_material_data(mat2);
+  // right now i am just doing this to work it out
+  for (int i = 0; i < 2; i++) {
     destroy_obj(obj_list[i]);
   }
   glfwDestroyWindow(window);

@@ -29,6 +29,7 @@ static void set_obj_attrib(object *obj, objAttrib *attr) {
   }
   glUniformMatrix4fv(u_model_loc, 1, GL_FALSE, (float *)trans_model);
 }
+
 // the mdoel matrix has to transform per frame so
 void render(object *obj, bool wireframe) {
   glUseProgram(obj->mat->shaderID);
@@ -41,6 +42,18 @@ void render(object *obj, bool wireframe) {
   obj->geo->ebo > 0 ? glDrawElements(GL_TRIANGLES, obj->geo->indices_count,
                                      GL_UNSIGNED_INT, 0)
                     : glDrawArrays(GL_TRIANGLES, 0, obj->geo->vertex_count);
+}
+
+void set_obj_update_callback(object *obj, obj_update_callback update_callback,
+                             void *user_data) {
+  obj->obj_update = update_callback;
+  obj->obj_data = user_data;
+}
+
+void obj_update(object *obj, float dt) {
+  if (obj->obj_update) {
+    obj->obj_update(obj, dt, obj->obj_data);
+  }
 }
 
 //(NOTE ::FOR ME) this funciton is implemented so dumb right now i mean when the
@@ -386,4 +399,8 @@ void setInt(GLuint program, const char *name, int value) {
 
 void setFloat(GLuint program, const char *name, float value) {
   glUniform1f(glGetUniformLocation(program, name), value);
+}
+
+void setVec3(GLuint program, const char *name, float x, float y, float z) {
+  glUniform3f(glGetUniformLocation(program, name), x, y, z);
 }

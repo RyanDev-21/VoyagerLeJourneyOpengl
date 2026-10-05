@@ -8,19 +8,6 @@
 extern "C" {
 #endif
 
-// typedef struct {
-//   vec3 pivot;
-//   float angle;
-// } camera_angle;
-//
-// typedef struct {
-//   vec3 position;
-//   camera_angle;
-//   float view_angle;
-//   float near;
-//   float far;
-//   float ratio;
-// } perspective_cam;
 typedef struct {
   GLuint vao;
   GLuint vbo;
@@ -49,21 +36,29 @@ typedef struct {
   vec3 rot_vec;
   float angle;
 } objAttrib;
-typedef struct {
-  geometry *geo;
-  material *mat;
-  objAttrib attrib;
-} object;
 
 typedef enum {
   VERTEX,
   FRAG,
 } shaderType;
 
+// this thing need to modify when there  are serveral object moving
+// on the same behaviour
+typedef struct object object;
+typedef void (*obj_update_callback)(object *obj, float dt, void *user_data);
+struct object {
+  geometry *geo;
+  material *mat;
+  objAttrib attrib;
+  obj_update_callback obj_update;
+  void *obj_data;
+};
+
 void setBool(GLuint program, const char *name, bool value);
 void setInt(GLuint program, const char *name, int value);
 void setFloat(GLuint program, const char *name, float value);
 void setMatrix4v(GLuint program, const char *name, mat4 matrix);
+void setVec3(GLuint program, const char *name, float x, float y, float z);
 geometry *create_geometry(float vertices[], size_t size_vert,
                           unsigned int indices[], size_t size_idx);
 void apply_trans_matrix(vec3 translate_vec, vec3 rot_vec, float angle,
@@ -78,6 +73,9 @@ geometry *create_cube_geometry(void);
 void render(object *obj, bool wireframe);
 object *create_mesh(geometry *geo, material *mat, objAttrib *attr);
 void destroy_obj(object *obj);
+void set_obj_update_callback(object *obj, obj_update_callback update_callback,
+                             void *user_data);
+void obj_update(object *obj, float dt);
 #ifdef __cplusplus
 }
 #endif
