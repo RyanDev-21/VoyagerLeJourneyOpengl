@@ -20,22 +20,29 @@ camera *create_cam(vec3 position, vec3 point_dir, float view_angle, float near,
   cam->near = near;
   cam->far = far;
   cam->ratio = ratio;
+  cam->yaw = -90.0f;
   return cam;
 };
 void cam_system_shutdown(void) { glDeleteBuffers(1, &cam_ubo); }
 void cam_destroy(camera *cam) { free(cam); }
 
+// this is per frame callback
 void cam_set_update_key_callback(camera *cam, update_callback update_func,
+
                                  void *data) {
   cam->update_key_func = update_func;
   cam->update_key_data = data;
 }
 
-void cam_set_update_mouse_callback(camera *cam,
-                                   update_mouse_callback update_func,
+void cam_set_update_mouse_callback(camera *cam, mouse_callback update_func,
                                    void *data) {
   cam->update_mouse_func = update_func;
   cam->update_mouse_data = data;
+}
+void cam_set_update_scroll_callback(camera *cam, mouse_callback update_func,
+                                    void *data) {
+  cam->update_scroll_func = update_func;
+  cam->update_scroll_data = data;
 }
 
 void cam_update_ratio(camera *cam, float ratio) { cam->ratio = ratio; }
@@ -54,9 +61,5 @@ void cam_upload(const camera *cam) {
 void cam_update(camera *cam, float dt) {
   if (cam->update_key_func) {
     cam->update_key_func(cam, dt, cam->update_key_data);
-  }
-
-  if (cam->update_mouse_func) {
-    cam->update_mouse_func(cam, cam->update_mouse_data);
   }
 }

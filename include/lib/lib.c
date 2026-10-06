@@ -83,8 +83,9 @@ static const char *injection_vertex =
     "}\n;"
     "uniform mat4 u_model\n;"
     "layout (location=0)in vec3 position;\n"
-    "layout (location=1) in vec3 color;\n"
-    "layout (location=2)in vec2 textureCoord;\n"
+    "layout (location=1)in vec3 aNormal;\n"
+    "layout (location=2) in vec3 color;\n"
+    "layout (location=3)in vec2 textureCoord;\n"
     "out vec3 a_color;\n"
     "out vec2 a_textCoord;\n";
 
@@ -169,44 +170,49 @@ void setMatrix4v(GLuint program, const char *name, mat4 matrix) {
 
 geometry *create_cube_geometry() {
   float vertices[] = {
-      // Front face (Z = 0.5f)
-      -0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // 0: bottom-left
-      0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,  // 1: bottom-right
-      0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // 2: top-right
-      -0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,  // 3: top-left
+      // --- Front face (Z = +0.5f, Normal: 0.0f, 0.0f, 1.0f) ---
+      //  Position (x,y,z)       Normal (nx,ny,nz)     Color (r,g,b)      Tex
+      //  (u,v)
+      -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+      0.0f, // 0: bottom-left
+      0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+      0.0f, // 1: bottom-right
+      0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+      1.0f, // 2: top-right
+      -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+      1.0f, // 3: top-left
 
-      // Back face (Z = -0.5f)
-      0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 4
-      -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // 5
-      -0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 6
-      0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,   // 7
+      // --- Back face (Z = -0.5f, Normal: 0.0f, 0.0f, -1.0f) ---
+      0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 4
+      -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // 5
+      -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 6
+      0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,   // 7
 
-      // Left face (X = -0.5f)
-      -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // 8
-      -0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,  // 9
-      -0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // 10
-      -0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,  // 11
+      // --- Left face (X = -0.5f, Normal: -1.0f, 0.0f, 0.0f) ---
+      -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // 8
+      -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,  // 9
+      -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 10
+      -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // 11
 
-      // Right face (X = 0.5f)
-      0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 12
-      0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // 13
-      0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 14
-      0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,   // 15
+      // --- Right face (X = +0.5f, Normal: 1.0f, 0.0f, 0.0f) ---
+      0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 12
+      0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // 13
+      0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 14
+      0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,   // 15
 
-      // Top face (Y = 0.5f)
-      -0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 16
-      0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,   // 17
-      0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 18
-      -0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // 19
+      // --- Top face (Y = +0.5f, Normal: 0.0f, 1.0f, 0.0f) ---
+      -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // 16
+      0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,   // 17
+      0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 18
+      -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // 19
 
-      // Bottom face (Y = -0.5f)
-      -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // 20
-      0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,  // 21
-      0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,   // 22
-      -0.5f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f   // 23
-  };
-
-  // 36 indices: 6 indices per face (two triangles: 0-1-2 and 2-3-0 pattern)
+      // --- Bottom face (Y = -0.5f, Normal: 0.0f, -1.0f, 0.0f) ---
+      -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+      0.0f,                                                                // 20
+      0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // 21
+      0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // 22
+      -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f  // 23
+  }; // 36 indices: 6 indices per face (two triangles: 0-1-2 and 2-3-0 pattern)
   unsigned int indices[] = {
       0,  1,  2,  2,  3,  0,  // Front
       4,  5,  6,  6,  7,  4,  // Back
@@ -229,16 +235,19 @@ geometry *create_geometry(float vertices[], size_t size_vert,
   glGenBuffers(1, &data->vbo);
   glBindBuffer(GL_ARRAY_BUFFER, data->vbo);
   glBufferData(GL_ARRAY_BUFFER, size_vert, vertices, GL_STATIC_DRAW);
-  size_t stride = 8 * sizeof(float);
+  size_t stride = 11 * sizeof(float);
   data->vertex_count = size_vert / stride;
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void *)0);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride,
                         (void *)(3 * sizeof(float)));
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride,
+  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride,
                         (void *)(6 * sizeof(float)));
   glEnableVertexAttribArray(2);
+  glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, stride,
+                        (void *)(9 * sizeof(float)));
+  glEnableVertexAttribArray(3);
   if (indices && size_idx > 0) {
     glGenBuffers(1, &data->ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data->ebo);

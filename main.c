@@ -10,18 +10,30 @@
 
 const char *vertex_shader_source =
     "#version 330 core\n"
+    "out vec3 Normal;\n"
+    "out vec3 fragPos;\n"
     "void main(){\n"
     "gl_Position=_projection*_view*u_model*vec4(position,1.0f);\n"
+    "Normal=aNormal;\n"
     "a_color=color;\n"
     "a_textCoord=textureCoord;\n"
+    "fragPos=vec3(u_model*vec4(position,1.0f));\n"
     "}\0";
 
 const char *frag_shader_source =
     "#version 330 core\n"
     "uniform vec3 objectColor;\n"
     "uniform vec3 lightColor;\n"
+    "in vec3 Normal;\n"
+    "uniform vec3 lightPos;\n"
+    "in vec3 fragPos;\n"
+    "float ambient =0.1f;\n"
     "void main(){\n"
-    "FragColor=vec4(objectColor*lightColor,1.0f);\n"
+    "vec3 norm = normalize(Normal);\n"
+    "vec3 lightDir =normalize(lightPos-fragPos);\n"
+    "float diff =max(dot(norm,lightDir),0.0f);\n"
+    "vec3 diffuse = diff*lightColor;\n"
+    "FragColor=vec4((ambient+diffuse)*objectColor,1.0f);\n"
     "}\0";
 const char *frag_shader_source_2 = "#version 330 core\n"
                                    "void main(){\n"
@@ -59,7 +71,6 @@ float lastX = 0;
 float lastY = 0;
 float sensitivity = 0.01f;
 
-camera *cam2;
 void apply_direction_cam(camera *cam, float xoffset, float yoffset) {
   cam->yaw += xoffset;
   cam->pitch -= yoffset; // reverse this so that when going up will look up
@@ -76,8 +87,9 @@ void apply_direction_cam(camera *cam, float xoffset, float yoffset) {
   glm_normalize(direction);
   glm_vec3_copy(direction, cam->point_dir);
 }
-void cam_mouse_callback(GLFWwindow *window, double xpos, double ypos) {
-  (void)window;
+void cam_mouse_callback(camera *cam, double xpos, double ypos,
+                        void *user_data) {
+  (void)user_data;
   float xoffset = xpos - lastX;
   float yoffset = ypos - lastY;
   lastX = xpos;
@@ -85,21 +97,24 @@ void cam_mouse_callback(GLFWwindow *window, double xpos, double ypos) {
 
   xoffset *= sensitivity;
   yoffset *= sensitivity;
-  apply_direction_cam(cam2, xoffset, yoffset);
+  apply_direction_cam(cam, xoffset, yoffset);
 }
 
-void cam_scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
-  (void)window;
+void cam_scroll_callback(camera *cam, double xoffset, double yoffset,
+                         void *user_data) {
   (void)xoffset;
-  cam2->view_angle -= (float)yoffset;
-  if (cam2->view_angle < 0.1f) {
-    cam2->view_angle = 0.1f;
+  (void)user_data;
+  cam->view_angle -= (float)yoffset;
+  if (cam->view_angle < 0.1f) {
+    cam->view_angle = 0.1f;
   }
-  if (cam2->view_angle > 45.0f) {
-    cam2->view_angle = 45.0f;
+  if (cam->view_angle > 45.0f) {
+    cam->view_angle = 45.0f;
   }
 }
 
+// this works like a fps cam and strictly reset the y dir if it has any value so
+// that the cam will say in the same y value
 void cam_key_callback(camera *cam, float dt, void *user_data) {
   GLFWwindow *window = (GLFWwindow *)user_data;
   float camera_speed = 10.0f * dt;
@@ -184,29 +199,21 @@ int main(void) {
                     .scale_vec = {1.0f, 1.0f, 1.0f}};
   glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, attr.position);
   obj = create_mesh(geo, mat, &attr);
-  set_obj_update_callback(obj, update_rotation, NULL);
+  set_obj_update_callback(obj, NULL, NULL);
   glm_vec3_copy((vec3){1.0f, 1.2f, -2.0f}, attr.position);
   obj2 = create_mesh(geo, mat2, &attr);
   set_obj_update_callback(obj2, NULL, NULL);
 
   // this one has to really shrink down
-  cam2 = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f}, 45.0f,
-                    0.1f, 100.0f, (float)width / (float)height);
-  cam2->yaw = -90.0f;
-  cam_set_update_key_callback(cam2, cam_key_callback, window);
-  renderer_init(window);
+  camera *cam2 = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f},
+                            45.0f, 0.1f, 100.0f, (float)width / (float)height);
   renderer_set_active_cam(cam2);
+  cam_set_update_key_callback(cam2, cam_key_callback, window);
+  cam_set_update_mouse_callback(cam2, cam_mouse_callback, NULL);
+  cam_set_update_scroll_callback(cam2, cam_scroll_callback, NULL);
+  renderer_init(window);
   float current_time;
   float last_time;
-  //
-  //
-  // this shouldn't be in this this should be abstracted
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  glfwSetCursorPosCallback(window, cam_mouse_callback);
-  glfwSetScrollCallback(window, cam_scroll_callback);
-  //
-  //
-  // up to this
   object *obj_list[2] = {obj, obj2};
   while (!glfwWindowShouldClose(window)) {
     glfwGetFramebufferSize(window, &width, &height);
@@ -219,6 +226,7 @@ int main(void) {
     glUseProgram(mat->shaderID);
     setVec3(mat->shaderID, "lightColor", 1.0f, 1.0f, 1.0f);
     setVec3(mat->shaderID, "objectColor", 1.0f, 0.5f, 0.31f);
+    setVec3(mat->shaderID, "lightPos", 1.0f, 1.2f, -2.0f);
     render(obj_list[0], false);
     render(obj_list[1], false);
     renderer_end_frame();

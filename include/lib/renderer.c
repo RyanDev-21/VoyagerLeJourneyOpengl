@@ -11,10 +11,30 @@ void renderer_set_obj_list(object **obj_list, size_t size) {
   obj = obj_list;
   obj_count = size;
 }
+
+static void opengl_mouse_callback(GLFWwindow *window, double x_offset,
+                                  double y_offset) {
+  camera *cam = (camera *)glfwGetWindowUserPointer(window);
+  if (cam && cam->update_mouse_func) {
+    cam->update_mouse_func(cam, x_offset, y_offset, cam->update_mouse_data);
+  }
+}
+static void opengl_scroll_callback(GLFWwindow *window, double x_offset,
+                                   double y_offset) {
+  camera *cam = (camera *)glfwGetWindowUserPointer(window);
+  if (cam && cam->update_scroll_func) {
+    cam->update_scroll_func(cam, x_offset, y_offset, cam->update_scroll_data);
+  }
+}
 void renderer_init(GLFWwindow *win) {
   glEnable(GL_DEPTH_TEST);
   cam_system_init();
   window = win;
+  glfwSetWindowUserPointer(win, active_cam);
+
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetCursorPosCallback(window, opengl_mouse_callback);
+  glfwSetScrollCallback(window, opengl_scroll_callback);
 }
 
 void renderer_begin_frame(float dt) {
