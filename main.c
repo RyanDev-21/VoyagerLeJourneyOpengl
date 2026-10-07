@@ -1,3 +1,4 @@
+#include "cglm/util.h"
 #include "cglm/vec3.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -14,7 +15,7 @@ const char *vertex_shader_source =
     "out vec3 fragPos;\n"
     "void main(){\n"
     "gl_Position=_projection*_view*u_model*vec4(position,1.0f);\n"
-    "Normal=aNormal;\n"
+    "Normal=mat3(transpose(inverse(u_model)))*aNormal;\n"
     "a_color=color;\n"
     "a_textCoord=textureCoord;\n"
     "fragPos=vec3(u_model*vec4(position,1.0f));\n"
@@ -24,16 +25,22 @@ const char *frag_shader_source =
     "#version 330 core\n"
     "uniform vec3 objectColor;\n"
     "uniform vec3 lightColor;\n"
+    "uniform vec3 viewPos;\n"
     "in vec3 Normal;\n"
     "uniform vec3 lightPos;\n"
     "in vec3 fragPos;\n"
     "float ambient =0.1f;\n"
+    "float specular_str=0.5f;\n"
     "void main(){\n"
-    "vec3 norm = normalize(Normal);\n"
     "vec3 lightDir =normalize(lightPos-fragPos);\n"
+    "vec3 norm = normalize(Normal);\n"
     "float diff =max(dot(norm,lightDir),0.0f);\n"
     "vec3 diffuse = diff*lightColor;\n"
-    "FragColor=vec4((ambient+diffuse)*objectColor,1.0f);\n"
+    "vec3 viewDir = normalize(viewPos-fragPos);\n"
+    "vec3 refDir =reflect(-lightDir,norm);\n"
+    "float spec = pow(max(dot(viewDir,refDir),0.0f),32);\n"
+    "vec3 specular = specular_str*spec*lightColor;\n"
+    "FragColor = vec4((ambient+diffuse+specular)*objectColor,1.0f);\n"
     "}\0";
 const char *frag_shader_source_2 = "#version 330 core\n"
                                    "void main(){\n"
@@ -123,9 +130,9 @@ void cam_key_callback(camera *cam, float dt, void *user_data) {
   vec3 right;
   vec3 tmp;
   glm_vec3_copy(cam->point_dir, tmp);
-  if (tmp[1] >= -1.0f && tmp[1] <= 1.0f) {
-    tmp[1] = 0.0f;
-  }
+  /* if (tmp[1] >= -1.0f && tmp[1] <= 1.0f) { */
+  /*   tmp[1] = 0.0f; */
+  /* } */
   glm_vec3_cross(tmp, up, right);
   glm_vec3_normalize(right);
   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
@@ -146,6 +153,14 @@ void update_rotation(object *obj, float dt, void *user_data) {
   (void)user_data;
   (void)dt;
   obj->attrib.angle = sin(glfwGetTime()) * 90.0f;
+}
+
+void update_rot_circle(object *obj, float dt, void *user_data) {
+  (void)dt;
+  (void)user_data;
+  float rad = 2.0f;
+  obj->attrib.position[1] = cos(glm_rad(glfwGetTime() / 2 * 180.0f)) * rad;
+  obj->attrib.position[2] = sin(glm_rad(glfwGetTime() / 2 * 180.0f)) * rad;
 }
 int main(void) {
   int width = 640;
@@ -194,15 +209,17 @@ int main(void) {
   material *mat2 = create_standard_material(NULL, NORMAL_MAP, &shader_2);
   object *obj;
   object *obj2;
-  objAttrib attr = {.angle = glm_rad(40.0f),
+  objAttrib attr = {.angle = glm_rad(45.0f),
                     .rot_vec = {1.0f, 0.0f, 0.0f},
                     .scale_vec = {1.0f, 1.0f, 1.0f}};
   glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, attr.position);
   obj = create_mesh(geo, mat, &attr);
   set_obj_update_callback(obj, NULL, NULL);
-  glm_vec3_copy((vec3){1.0f, 1.2f, -2.0f}, attr.position);
+  vec3 obj_2_pos = {0.0f, 1.2f, -2.0f};
+  glm_vec3_copy(obj_2_pos, attr.position);
+  glm_vec3_copy((vec3){0.1f, 0.1f, 0.1f}, attr.scale_vec);
   obj2 = create_mesh(geo, mat2, &attr);
-  set_obj_update_callback(obj2, NULL, NULL);
+  set_obj_update_callback(obj2, update_rot_circle, NULL);
 
   // this one has to really shrink down
   camera *cam2 = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f},
@@ -226,7 +243,12 @@ int main(void) {
     glUseProgram(mat->shaderID);
     setVec3(mat->shaderID, "lightColor", 1.0f, 1.0f, 1.0f);
     setVec3(mat->shaderID, "objectColor", 1.0f, 0.5f, 0.31f);
-    setVec3(mat->shaderID, "lightPos", 1.0f, 1.2f, -2.0f);
+    vec3 pos;
+    glm_vec3_copy(obj2->attrib.position, pos);
+    // this is not good has to fix later
+    setVec3(mat->shaderID, "lightPos", pos[0], pos[1], pos[2]);
+    setVec3(mat->shaderID, "viewPos", cam2->position[0], cam2->position[1],
+            cam2->position[2]);
     render(obj_list[0], false);
     render(obj_list[1], false);
     renderer_end_frame();

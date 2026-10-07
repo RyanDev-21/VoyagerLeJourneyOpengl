@@ -31,7 +31,6 @@ void renderer_init(GLFWwindow *win) {
   cam_system_init();
   window = win;
   glfwSetWindowUserPointer(win, active_cam);
-
   glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
   glfwSetCursorPosCallback(window, opengl_mouse_callback);
   glfwSetScrollCallback(window, opengl_scroll_callback);

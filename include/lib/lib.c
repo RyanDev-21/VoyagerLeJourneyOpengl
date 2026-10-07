@@ -17,16 +17,19 @@ static GLuint read_and_bind_texture(const char *path, GLuint program,
                                     GLenum target);
 static bool check_status(GLuint object, GLenum status_type, const char *label);
 
-static GLuint u_model_loc;
+static GLint u_model_loc;
 
 //(NOTE::For me)Has to rethink about this
+// Right now this sovles the problem  but have to consider the u_model_loc
+// more
+// u_model should belong to each object
+// right now we are just overwriting
 static void set_obj_attrib(object *obj, objAttrib *attr) {
   mat4 trans_model = GLM_MAT4_IDENTITY_INIT;
-  apply_trans_matrix(attr->position, attr->rot_vec, glm_rad(attr->angle),
+  apply_trans_matrix(attr->position, attr->rot_vec, attr->angle,
                      attr->scale_vec, &trans_model);
-  if (!u_model_loc) {
-    u_model_loc = glGetUniformLocation(obj->mat->shaderID, "u_model");
-  }
+  u_model_loc = glGetUniformLocation(obj->mat->shaderID, "u_model");
+
   glUniformMatrix4fv(u_model_loc, 1, GL_FALSE, (float *)trans_model);
 }
 
@@ -104,7 +107,7 @@ static void inject_and_compile(GLuint programID, const char *raw_shader,
          "Cannot find the version core init for glsl");
   // parse the version core line
   StringView version_line = sv_cut_by_delim(&rest, '\n');
-  printf(STR_FMT, STR_ARG(version_line));
+  /* printf(STR_FMT, STR_ARG(version_line)); */
   const char *sources[4] = {version_line.data, "\n", header, rest.data};
   GLint lengths[4] = {version_line.count, 1, (GLuint)strlen(header),
                       rest.count};
