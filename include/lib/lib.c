@@ -17,6 +17,31 @@ static GLuint read_and_bind_texture(const char *path, GLuint program,
                                     GLenum target);
 static bool check_status(GLuint object, GLenum status_type, const char *label);
 
+static Mat_props mat_preset[2] = {
+    [GOLD] = {{0.24725f, 0.1995f, 0.0745f},
+              {0.75164f, 0.60648f, 0.22648f},
+              {0.628281f, 0.555802f, 0.366065f},
+              0.4f * 128.0f},
+    [EMERALD] = {{0.0215f, 0.1745f, 0.0215f},
+                 {0.07568f, 0.61424f, 0.07568f},
+                 {0.633f, 0.727811f, 0.633f},
+                 0.6f * 128.0f},
+
+};
+
+material *create_material(const char *text_source, text_map type,
+                          shader *shader, MAT_TYPE preset) {
+  material *mat = create_standard_material(text_source, type, shader);
+  mat->props = &mat_preset[preset];
+  return mat;
+}
+
+material *create_material_custom(const char *text_source, text_map type,
+                                 shader *shader, Mat_props props) {
+  material *mat = create_standard_material(text_source, type, shader);
+  /* mat->props =  */
+}
+
 static GLint u_model_loc;
 
 //(NOTE::For me)Has to rethink about this
@@ -28,15 +53,27 @@ static void set_obj_attrib(object *obj, objAttrib *attr) {
   mat4 trans_model = GLM_MAT4_IDENTITY_INIT;
   apply_trans_matrix(attr->position, attr->rot_vec, attr->angle,
                      attr->scale_vec, &trans_model);
-  u_model_loc = glGetUniformLocation(obj->mat->shaderID, "u_model");
+  u_model_loc = glGetUniformLocation(obj->mat->shader->shaderID, "u_model");
 
   glUniformMatrix4fv(u_model_loc, 1, GL_FALSE, (float *)trans_model);
+}
+static void setVec3_with_loc(GLint loc, vec3 value) {
+  glUniform3f(loc, value[0], value[1], value[2]);
+}
+
+static void set_material_props(material *mat) {
+  setVec3_with_loc(mat->shader->mat_loc->loc_ambient, mat->props->ambient);
+  setVec3_with_loc(mat->shader->mat_loc->loc_diffuse, mat->props->diffuse);
+  setVec3_with_loc(mat->shader->mat_loc->loc_specular, mat->props->specular);
+  glUniform1f(mat->shader->mat_loc->loc_shininess, mat->props->shininess);
 }
 
 // the mdoel matrix has to transform per frame so
 void render(object *obj, bool wireframe) {
-  glUseProgram(obj->mat->shaderID);
+  glUseProgram(obj->mat->shader->shaderID);
   set_obj_attrib(obj, &obj->attrib);
+  // this will set the material stuff
+  set_material_props(obj->mat);
   glBindVertexArray(obj->geo->vao);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, obj->mat->textureID);
@@ -78,6 +115,7 @@ object *create_mesh(geometry *geo, material *mat, objAttrib *attr) {
   return obj;
 }
 
+// maybe reconsider about version core line
 static const char *injection_vertex =
     "layout(std140) uniform;\n"
     "uniform cam_uniform{\n"
@@ -95,7 +133,14 @@ static const char *injection_vertex =
 static const char *injection_frag = "out vec4 FragColor;\n"
                                     "in vec3 a_color;\n"
                                     "in vec2 a_textCoord;\n"
-                                    "uniform sampler2D texture1;\n";
+                                    "uniform sampler2D texture1;\n"
+                                    "struct Material{"
+                                    "vec3 ambient;\n"
+                                    "vec3 diffuse;\n"
+                                    "vec3 specular;\n"
+                                    "float shininess;\n"
+                                    "};\n"
+                                    "uniform Material material;\n";
 static void inject_and_compile(GLuint programID, const char *raw_shader,
                                shaderType type) {
   const char *header = type == VERTEX ? injection_vertex : injection_frag;
@@ -114,15 +159,16 @@ static void inject_and_compile(GLuint programID, const char *raw_shader,
   GLuint shaderID = glCreateShader(gl_type);
   glShaderSource(shaderID, 4, sources, lengths);
   glCompileShader(shaderID);
-  assert(check_status(shaderID, GL_COMPILE_STATUS, "shader") &&
+  assert(check_status(shaderID, GL_COMPILE_STATUS,
+                      type == VERTEX ? "vertex" : "frag") &&
          "[ERROR]Failed to compiled the injected shader\n");
 
   glAttachShader(programID, shaderID);
   glDeleteShader(shaderID);
 }
 
-material *create_standard_material(const char *tex_source, text_map type,
-                                   shader *shader) {
+static material *create_standard_material(const char *tex_source, text_map type,
+                                          shader *shader) {
   material *mat = calloc(1, sizeof(material));
   assert(mat != NULL && "[ERROR]Failed to allocate the material");
   if (shader != NULL) {
@@ -138,19 +184,21 @@ material *create_standard_material(const char *tex_source, text_map type,
     glLinkProgram(programID);
     assert(check_status(programID, GL_LINK_STATUS, "program") &&
            "[ERROR]Failed to link both program\n");
-    mat->shaderID = programID;
-    GLuint idx = glGetUniformBlockIndex(mat->shaderID, "cam_uniform");
+    shader->shaderID = programID;
+    GLuint idx = glGetUniformBlockIndex(shader->shaderID, "cam_uniform");
     if (idx != GL_INVALID_INDEX) {
-      glUniformBlockBinding(mat->shaderID, idx, CAM_BINDING);
+      glUniformBlockBinding(shader->shaderID, idx, CAM_BINDING);
     }
   }
 
   // if text_source exits then we need to load and bind them
   if (tex_source != NULL) {
-    GLuint textureID = read_and_bind_texture(tex_source, mat->shaderID,
+    GLuint textureID = read_and_bind_texture(tex_source, shader->shaderID,
                                              "texture1", GL_RGB, GL_TEXTURE0);
     mat->textureID = textureID;
   }
+
+  mat->shader = shader;
 
   return mat;
 }
@@ -294,7 +342,7 @@ void apply_trans_matrix(vec3 translate_vec, vec3 rot_vec, float angle_rad,
 }
 
 void destroy_material_data(material *mat) {
-  glDeleteProgram(mat->shaderID);
+  glDeleteProgram(mat->shader->shaderID);
   glDeleteTextures(1, &mat->textureID);
   free(mat);
 }
@@ -413,6 +461,7 @@ void setFloat(GLuint program, const char *name, float value) {
   glUniform1f(glGetUniformLocation(program, name), value);
 }
 
-void setVec3(GLuint program, const char *name, float x, float y, float z) {
-  glUniform3f(glGetUniformLocation(program, name), x, y, z);
+void setVec3(GLuint program, const char *name, vec3 value) {
+  glUniform3f(glGetUniformLocation(program, name), value[0], value[1],
+              value[2]);
 }

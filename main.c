@@ -23,29 +23,65 @@ const char *vertex_shader_source =
 
 const char *frag_shader_source =
     "#version 330 core\n"
-    "uniform vec3 objectColor;\n"
+    "struct Material{ \n"
+    "vec3 ambient;\n"
+    "vec3 diffuse;\n"
+    "vec3 specular;\n"
+    "float shininess;\n"
+    "};\n"
+    "uniform Material material;"
+    "uniform vec3 lightPos;\n"
     "uniform vec3 lightColor;\n"
     "uniform vec3 viewPos;\n"
-    "in vec3 Normal;\n"
-    "uniform vec3 lightPos;\n"
+    "uniform vec3 objectColor;\n"
     "in vec3 fragPos;\n"
-    "float ambient =0.1f;\n"
-    "float specular_str=0.5f;\n"
+    "in vec3 Normal;\n"
     "void main(){\n"
-    "vec3 lightDir =normalize(lightPos-fragPos);\n"
     "vec3 norm = normalize(Normal);\n"
-    "float diff =max(dot(norm,lightDir),0.0f);\n"
-    "vec3 diffuse = diff*lightColor;\n"
+    "vec3 ambient = lightColor*material.ambient;\n"
+    "vec3 lightDir = normalize(lightPos-fragPos);\n"
+    "float diff = max(dot(lightDir,norm),0.0f);\n"
+    "vec3 diffuse = lightColor*diff*material.diffuse;\n"
     "vec3 viewDir = normalize(viewPos-fragPos);\n"
-    "vec3 refDir =reflect(-lightDir,norm);\n"
-    "float spec = pow(max(dot(viewDir,refDir),0.0f),32);\n"
-    "vec3 specular = specular_str*spec*lightColor;\n"
-    "FragColor = vec4((ambient+diffuse+specular)*objectColor,1.0f);\n"
+    "vec3 refDir = reflect(-lightDir,norm);\n"
+    "float spec = pow(max(dot(viewDir,refDir),0.0f),material.shininess); \n"
+    "vec3 specular = lightColor*material.specular*spec;\n"
+    "FragColor = vec4((ambient+diffuse+specular),1.0f);\n"
     "}\0";
 const char *frag_shader_source_2 = "#version 330 core\n"
                                    "void main(){\n"
                                    "FragColor=vec4(1.0f);\n"
                                    "};\n";
+const char *vertex_shader_phong =
+    "#version 330 core\n"
+    "uniform vec3 objectColor;\n"
+    "uniform vec3 lightColor;\n"
+    "uniform vec3 viewPos;\n"
+    "uniform vec3 lightPos;\n"
+    "out vec3 result;\n"
+    "float ambient =0.01f;\n"
+    "float specular_str=0.5f;\n"
+    "void main(){\n"
+    "vec3 Normal=mat3(transpose(inverse(_view*u_model)))*aNormal;\n"
+    "vec3 lightPosView =vec3(_view*vec4(lightPos,1.0f));\n"
+    "vec3 fragPos=vec3(_view*u_model*vec4(position,1.0f));\n"
+    "vec3 lightDir= normalize(lightPosView-fragPos);\n"
+    "vec3 norm = normalize(Normal);\n"
+    "float diff =max(dot(norm,lightDir),0.0f);\n"
+    "vec3 diffuse = diff*lightColor;\n"
+    "vec3 viewDir = normalize(-fragPos);\n"
+    "vec3 refDir =reflect(-lightDir,norm);\n"
+    "float spec = pow(max(dot(viewDir,refDir),0.0f),256);\n"
+    "vec3 specular = specular_str*spec*lightColor;\n"
+    "gl_Position=_projection*_view*u_model*vec4(position,1.0f);\n"
+    "result = (ambient+diffuse+specular)*objectColor;\n"
+    "};\n";
+
+const char *frag_shader_phong = "#version 330 core\n"
+                                "in vec3 result;\n"
+                                "void main(){\n"
+                                "FragColor=vec4(result,1.0f);\n"
+                                "};\n";
 
 static void error_callback(int error, const char *description) {
   fprintf(stderr, "Error:%d , Description:%s\n", error, description);
@@ -212,14 +248,18 @@ int main(void) {
   objAttrib attr = {.angle = glm_rad(45.0f),
                     .rot_vec = {1.0f, 0.0f, 0.0f},
                     .scale_vec = {1.0f, 1.0f, 1.0f}};
-  glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, attr.position);
+  glm_vec3_copy((vec3){-1.0f, 0.0f, 0.0f}, attr.position);
   obj = create_mesh(geo, mat, &attr);
   set_obj_update_callback(obj, NULL, NULL);
-  vec3 obj_2_pos = {0.0f, 1.2f, -2.0f};
+  /* vec3 obj_3_pos = {1.0f, 0.0f, -1.0f}; */
+  /* glm_vec3_copy(obj_3_pos, attr.position); */
+  /* obj3 = create_mesh(geo, mat3, &attr); */
+  /* set_obj_update_callback(obj3, NULL, NULL); */
+  vec3 obj_2_pos = {1.0f, 1.2f, -2.0f};
   glm_vec3_copy(obj_2_pos, attr.position);
   glm_vec3_copy((vec3){0.1f, 0.1f, 0.1f}, attr.scale_vec);
   obj2 = create_mesh(geo, mat2, &attr);
-  set_obj_update_callback(obj2, update_rot_circle, NULL);
+  set_obj_update_callback(obj2, NULL, NULL);
 
   // this one has to really shrink down
   camera *cam2 = create_cam((vec3){0.0f, 0.0f, 5.0f}, (vec3){0.0f, 0.0f, -1.0f},
@@ -242,7 +282,12 @@ int main(void) {
     renderer_set_obj_list(obj_list, 2);
     glUseProgram(mat->shaderID);
     setVec3(mat->shaderID, "lightColor", 1.0f, 1.0f, 1.0f);
-    setVec3(mat->shaderID, "objectColor", 1.0f, 0.5f, 0.31f);
+    setVec3(mat->shaderID, "material.ambient", 1.0f, 0.5f, 0.31f);
+    setVec3(mat->shaderID, "material.diffuse", 1.0f, 0.5f, 0.31f);
+    setVec3(mat->shaderID, "material.specular", 0.5f, 0.5f, 0.5f);
+    setFloat(mat->shaderID, "material.shininess", 32.0f);
+    /* setVec3(mat3->shaderID, "lightColor", 1.0f, 1.0f, 1.0f); */
+    /* setVec3(mat3->shaderID, "objectColor", 1.0f, 0.5f, 0.31f); */
     vec3 pos;
     glm_vec3_copy(obj2->attrib.position, pos);
     // this is not good has to fix later

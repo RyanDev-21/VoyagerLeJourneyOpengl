@@ -7,6 +7,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+typedef enum {
+  GOLD,
+  EMERALD,
+} MAT_TYPE;
 
 typedef struct {
   GLuint vao;
@@ -22,12 +26,30 @@ typedef enum {
 } text_map;
 
 typedef struct {
+  GLuint loc_ambient;
+  GLuint loc_diffuse;
+  GLuint loc_specular;
+  GLuint loc_shininess;
+} Mat_LOC;
+
+typedef struct {
+  Mat_LOC *mat_loc;
   const char *vertex;
   const char *frag;
-} shader;
-typedef struct {
-  GLuint textureID;
   GLuint shaderID;
+} shader;
+
+typedef struct {
+  vec3 ambient;
+  vec3 diffuse;
+  vec3 specular;
+  float shininess;
+} Mat_props;
+
+typedef struct {
+  shader *shader;
+  Mat_props *props;
+  GLuint textureID;
 } material;
 
 typedef struct {
@@ -58,14 +80,14 @@ void setBool(GLuint program, const char *name, bool value);
 void setInt(GLuint program, const char *name, int value);
 void setFloat(GLuint program, const char *name, float value);
 void setMatrix4v(GLuint program, const char *name, mat4 matrix);
-void setVec3(GLuint program, const char *name, float x, float y, float z);
+void setVec3(GLuint program, const char *name, vec3 value);
 geometry *create_geometry(float vertices[], size_t size_vert,
                           unsigned int indices[], size_t size_idx);
 void apply_trans_matrix(vec3 translate_vec, vec3 rot_vec, float angle,
                         vec3 scale_vec, mat4 *dest);
 void destroy_geometry_data(geometry *data);
-material *create_standard_material(const char *tex_source, text_map type,
-                                   shader *shader);
+static material *create_standard_material(const char *tex_source, text_map type,
+                                          shader *shader);
 void destroy_material_data(material *mat);
 void render_recursive_carpet(GLuint program, float cx, float cy, float size,
                              int depth, float time_val, size_t *triangle_count);
@@ -76,6 +98,8 @@ void destroy_obj(object *obj);
 void set_obj_update_callback(object *obj, obj_update_callback update_callback,
                              void *user_data);
 void obj_update(object *obj, float dt);
+material *create_material(const char *tex_source, text_map type, shader *shader,
+                          MAT_TYPE preset);
 #ifdef __cplusplus
 }
 #endif
