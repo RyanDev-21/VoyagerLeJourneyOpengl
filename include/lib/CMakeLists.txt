@@ -9,4 +9,5 @@ target_link_libraries(gl_util PUBLIC
     cglm
     OpenGL::GL
     m
+    glfw
 )

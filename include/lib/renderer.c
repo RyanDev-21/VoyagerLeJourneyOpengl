@@ -1,6 +1,5 @@
 #include "renderer.h"
 #include "lib.h"
-#include <GLFW/glfw3.h>
 #include <camera.h>
 static camera *active_cam;
 static GLFWwindow *window;

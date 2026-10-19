@@ -33,7 +33,7 @@ typedef struct {
 } Mat_LOC;
 
 typedef struct {
-  Mat_LOC *mat_loc;
+  Mat_LOC mat_loc;
   const char *vertex;
   const char *frag;
   GLuint shaderID;
@@ -48,7 +48,7 @@ typedef struct {
 
 typedef struct {
   shader *shader;
-  Mat_props *props;
+  Mat_props props;
   GLuint textureID;
 } material;
 
@@ -86,8 +86,8 @@ geometry *create_geometry(float vertices[], size_t size_vert,
 void apply_trans_matrix(vec3 translate_vec, vec3 rot_vec, float angle,
                         vec3 scale_vec, mat4 *dest);
 void destroy_geometry_data(geometry *data);
-static material *create_standard_material(const char *tex_source, text_map type,
-                                          shader *shader);
+material *create_standard_material(const char *tex_source, text_map type,
+                                   shader *shader);
 void destroy_material_data(material *mat);
 void render_recursive_carpet(GLuint program, float cx, float cy, float size,
                              int depth, float time_val, size_t *triangle_count);

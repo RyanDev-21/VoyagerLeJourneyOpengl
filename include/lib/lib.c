@@ -8,6 +8,7 @@
 #include "../std_image.h"
 
 #define CAM_BINDING 0
+#define MAT_BINDING 1
 
 static GLuint compile_into_program(const char *vertex_shader_source,
                                    const char *frag_shader_source);
@@ -32,14 +33,8 @@ static Mat_props mat_preset[2] = {
 material *create_material(const char *text_source, text_map type,
                           shader *shader, MAT_TYPE preset) {
   material *mat = create_standard_material(text_source, type, shader);
-  mat->props = &mat_preset[preset];
+  mat->props = mat_preset[preset];
   return mat;
-}
-
-material *create_material_custom(const char *text_source, text_map type,
-                                 shader *shader, Mat_props props) {
-  material *mat = create_standard_material(text_source, type, shader);
-  /* mat->props =  */
 }
 
 static GLint u_model_loc;
@@ -62,10 +57,12 @@ static void setVec3_with_loc(GLint loc, vec3 value) {
 }
 
 static void set_material_props(material *mat) {
-  setVec3_with_loc(mat->shader->mat_loc->loc_ambient, mat->props->ambient);
-  setVec3_with_loc(mat->shader->mat_loc->loc_diffuse, mat->props->diffuse);
-  setVec3_with_loc(mat->shader->mat_loc->loc_specular, mat->props->specular);
-  glUniform1f(mat->shader->mat_loc->loc_shininess, mat->props->shininess);
+  assert(mat);
+  assert(mat->shader);
+  setVec3_with_loc(mat->shader->mat_loc.loc_ambient, mat->props.ambient);
+  setVec3_with_loc(mat->shader->mat_loc.loc_diffuse, mat->props.diffuse);
+  setVec3_with_loc(mat->shader->mat_loc.loc_specular, mat->props.specular);
+  glUniform1f(mat->shader->mat_loc.loc_shininess, mat->props.shininess);
 }
 
 // the mdoel matrix has to transform per frame so
@@ -152,7 +149,6 @@ static void inject_and_compile(GLuint programID, const char *raw_shader,
          "Cannot find the version core init for glsl");
   // parse the version core line
   StringView version_line = sv_cut_by_delim(&rest, '\n');
-  /* printf(STR_FMT, STR_ARG(version_line)); */
   const char *sources[4] = {version_line.data, "\n", header, rest.data};
   GLint lengths[4] = {version_line.count, 1, (GLuint)strlen(header),
                       rest.count};
@@ -167,8 +163,8 @@ static void inject_and_compile(GLuint programID, const char *raw_shader,
   glDeleteShader(shaderID);
 }
 
-static material *create_standard_material(const char *tex_source, text_map type,
-                                          shader *shader) {
+material *create_standard_material(const char *tex_source, text_map type,
+                                   shader *shader) {
   material *mat = calloc(1, sizeof(material));
   assert(mat != NULL && "[ERROR]Failed to allocate the material");
   if (shader != NULL) {
@@ -197,9 +193,22 @@ static material *create_standard_material(const char *tex_source, text_map type,
                                              "texture1", GL_RGB, GL_TEXTURE0);
     mat->textureID = textureID;
   }
-
+  mat->props = (Mat_props){
+      .ambient = {0.2f, 0.2f, 0.2f},
+      .diffuse = {0.8f, 0.8f, 0.8f},
+      .specular = {0.5f, 0.5f, 0.5f},
+      .shininess = 32.0f,
+  };
+  assert(mat->shader == NULL && "failed to get the shader struct");
   mat->shader = shader;
-
+  mat->shader->mat_loc.loc_shininess =
+      glGetUniformLocation(mat->shader->shaderID, "material.shininess");
+  mat->shader->mat_loc.loc_ambient =
+      glGetUniformLocation(mat->shader->shaderID, "material.ambient");
+  mat->shader->mat_loc.loc_diffuse =
+      glGetUniformLocation(mat->shader->shaderID, "material.diffuse");
+  mat->shader->mat_loc.loc_specular =
+      glGetUniformLocation(mat->shader->shaderID, "material.specular");
   return mat;
 }
 

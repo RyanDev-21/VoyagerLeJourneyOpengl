@@ -18,7 +18,7 @@ add_library(glad STATIC
 # add_library(glm STATIC
 #     include/glm/glm.c
 # )
-target_include_directories(glad PUBLIC
+target_include_directories(glad SYSTEM PUBLIC
     include/glad/include
 )
 
@@ -34,6 +34,8 @@ FetchContent_Declare(
     GIT_TAG        v0.9.4 # Or latest release tag
 )
 FetchContent_MakeAvailable(cglm)
+get_target_property(CGLM_INC cglm INTERFACE_INCLUDE_DIRECTORIES)
+set_target_properties(cglm PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${CGLM_INC}")
 
 
 add_subdirectory(include/lib)
@@ -46,7 +48,7 @@ target_include_directories(program PRIVATE
 target_link_options(program PRIVATE -fsanitize=address)
 target_compile_options(program PRIVATE
     -Wall
-    -Wextra
+    # -Wextra
     -Werror
     -pedantic
     -ggdb

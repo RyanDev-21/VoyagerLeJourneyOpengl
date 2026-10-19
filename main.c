@@ -23,13 +23,6 @@ const char *vertex_shader_source =
 
 const char *frag_shader_source =
     "#version 330 core\n"
-    "struct Material{ \n"
-    "vec3 ambient;\n"
-    "vec3 diffuse;\n"
-    "vec3 specular;\n"
-    "float shininess;\n"
-    "};\n"
-    "uniform Material material;"
     "uniform vec3 lightPos;\n"
     "uniform vec3 lightColor;\n"
     "uniform vec3 viewPos;\n"
@@ -51,7 +44,7 @@ const char *frag_shader_source =
 const char *frag_shader_source_2 = "#version 330 core\n"
                                    "void main(){\n"
                                    "FragColor=vec4(1.0f);\n"
-                                   "};\n";
+                                   "}\0";
 const char *vertex_shader_phong =
     "#version 330 core\n"
     "uniform vec3 objectColor;\n"
@@ -239,6 +232,7 @@ int main(void) {
   };
 
   material *mat = create_standard_material(NULL, NORMAL_MAP, &shader_1);
+
   // making two different material  for only change in frag shader is worth it i
   // guess
   // need to change later
@@ -251,10 +245,7 @@ int main(void) {
   glm_vec3_copy((vec3){-1.0f, 0.0f, 0.0f}, attr.position);
   obj = create_mesh(geo, mat, &attr);
   set_obj_update_callback(obj, NULL, NULL);
-  /* vec3 obj_3_pos = {1.0f, 0.0f, -1.0f}; */
-  /* glm_vec3_copy(obj_3_pos, attr.position); */
-  /* obj3 = create_mesh(geo, mat3, &attr); */
-  /* set_obj_update_callback(obj3, NULL, NULL); */
+
   vec3 obj_2_pos = {1.0f, 1.2f, -2.0f};
   glm_vec3_copy(obj_2_pos, attr.position);
   glm_vec3_copy((vec3){0.1f, 0.1f, 0.1f}, attr.scale_vec);
@@ -280,20 +271,23 @@ int main(void) {
     last_time = current_time;
     renderer_begin_frame(dt);
     renderer_set_obj_list(obj_list, 2);
-    glUseProgram(mat->shaderID);
-    setVec3(mat->shaderID, "lightColor", 1.0f, 1.0f, 1.0f);
-    setVec3(mat->shaderID, "material.ambient", 1.0f, 0.5f, 0.31f);
-    setVec3(mat->shaderID, "material.diffuse", 1.0f, 0.5f, 0.31f);
-    setVec3(mat->shaderID, "material.specular", 0.5f, 0.5f, 0.5f);
-    setFloat(mat->shaderID, "material.shininess", 32.0f);
-    /* setVec3(mat3->shaderID, "lightColor", 1.0f, 1.0f, 1.0f); */
-    /* setVec3(mat3->shaderID, "objectColor", 1.0f, 0.5f, 0.31f); */
+    glUseProgram(mat->shader->shaderID);
+    setVec3(mat->shader->shaderID, "lightColor", (vec3){1.0f, 1.0f, 1.0f});
+    setVec3(mat->shader->shaderID, "material.ambient",
+            (vec3){1.0f, 0.5f, 0.31f});
+    setVec3(mat->shader->shaderID, "material.diffuse",
+            (vec3){1.0f, 0.5f, 0.31f});
+    setVec3(mat->shader->shaderID, "material.specular",
+            (vec3){0.5f, 0.5f, 0.5f});
+    setFloat(mat->shader->shaderID, "material.shininess", 32.0f);
+    /* setVec3(mat->shader3->shaderID, "lightColor", 1.0f, 1.0f, 1.0f); */
+    /* setVec3(mat->shader3->shaderID, "objectColor", 1.0f, 0.5f, 0.31f); */
     vec3 pos;
     glm_vec3_copy(obj2->attrib.position, pos);
     // this is not good has to fix later
-    setVec3(mat->shaderID, "lightPos", pos[0], pos[1], pos[2]);
-    setVec3(mat->shaderID, "viewPos", cam2->position[0], cam2->position[1],
-            cam2->position[2]);
+    setVec3(mat->shader->shaderID, "lightPos", (vec3){pos[0], pos[1], pos[2]});
+    setVec3(mat->shader->shaderID, "viewPos",
+            (vec3){cam2->position[0], cam2->position[1], cam2->position[2]});
     render(obj_list[0], false);
     render(obj_list[1], false);
     renderer_end_frame();
